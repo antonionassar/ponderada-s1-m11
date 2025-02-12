@@ -1,0 +1,225 @@
+---
+title: "ponderada1-nassar"
+output: html_document
+date: "2025-02-12"
+---
+
+## Carregando Pacotes Necessários
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(FactoMineR)
+library(corrplot)
+```
+
+## Obtendo os Dados e Visualização das Primeiras Linhas
+
+```{r}
+# Ler um arquivo CSV
+data <- read.csv("~/Desktop/Projeto Volks (M11 Inteli)/dados/InteliFalhas.csv")
+
+# Visualizar as primeiras linhas
+dplyr::glimpse(data)
+head(data)
+```
+
+## Verificação da Estrutura dos Dados
+```{r}
+str(data)
+```
+
+# Resumo Estatístico e Descrição dos Dados
+
+## Resumo estatístico
+
+```{r}
+descriptive_stats <- summary(data)
+descriptive_stats
+```
+
+## Ajustes do Dataset
+
+```{r}
+data <- data %>%
+  mutate(
+    ID = as.character(ID),
+    `DATA.DETECCAO` = as.POSIXct(`DATA.DETECCAO`, format="%Y-%m-%d-%H.%M.%S", tz="UTC"),
+    PONTO=as.factor(PONTO),
+    LOC_ID=as.factor(LOC_ID),
+    LOC=as.factor(LOC),
+    POS_ID=as.factor(POS_ID),
+    POS=as.factor(POS),
+    TYPE_ID=as.factor(TYPE_ID),
+    TYPE_TEXT=as.factor(TYPE_TEXT),
+    VIEW_ID=as.factor(VIEW_ID),
+    COLUNA=as.factor(COLUNA),
+    LINHA=as.factor(LINHA)
+)
+```
+
+# Tratamento de valores ausentes
+```{r}
+missing_values <- colSums(is.na(data))
+print("Valores ausentes por coluna:")
+print(missing_values)
+```
+# Removendo linhas com muitas informações ausentes
+```{r}
+data <- na.omit(data)
+```
+
+# Verificação de valores extremos
+```{r}
+summary(as.numeric(as.character(data$POS_ID)))
+summary(as.numeric(as.character(data$LOC_ID)))
+summary(as.numeric(as.character(data$VIEW_ID)))
+```
+
+## Resumo Estatístico (Após ajustes)
+
+```{r}
+descriptive_stats <- summary(data)
+descriptive_stats
+```
+# Descrição das variáveis:
+# - ID: Identificação única de cada ocorrência.
+# - DATA DETECCAO: Data e hora da detecção da falha.
+# - PONTO: Localização geral da falha.
+# - LOC_ID: Código identificador do local.
+# - LOC: Descrição do local específico.
+# - POS_ID: Código de posição.
+# - POS: Posição detalhada.
+# - TYPE_ID: Código do tipo de falha.
+# - TYPE_TEXT: Descrição do tipo de falha.
+# - VIEW_ID: Código de visualização.
+# - COLUNA: Coluna da falha.
+# - LINHA: Linha da falha.
+
+# Análise Univariada
+
+# Agrupando tipos de falha menos frequentes para melhor visualização
+```{r}
+top_types <- names(sort(table(data$TYPE_TEXT), decreasing = TRUE)[1:15])
+data$TYPE_TEXT_GROUPED <- ifelse(data$TYPE_TEXT %in% top_types, data$TYPE_TEXT, "Outros")
+```
+
+# Histograma de ocorrências por tipo de falha
+
+```{r}
+ggplot(data, aes(x = TYPE_TEXT_GROUPED)) +
+  geom_bar(fill = "blue", color = "black") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Distribuição dos Principais Tipos de Falha")
+```
+
+# Identificação de outliers nas ocorrências por posição
+```{r}
+boxplot_data <- as.numeric(as.character(data$POS_ID))
+boxplot(boxplot_data, main = "Boxplot de POS_ID", col = "red")
+text(x = 1.2, y = fivenum(boxplot_data), labels = fivenum(boxplot_data), pos = 4)
+```
+# Análise Bivariada
+
+# Relação entre PONTO e TYPE_TEXT
+```{r}
+ggplot(data, aes(x = PONTO, fill = TYPE_TEXT)) +
+  geom_bar(position = "dodge") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Relação entre PONTO e Tipos de Falha")
+```
+# Matriz de correlação entre variáveis numéricas
+```{r}
+numerical_data <- data %>%
+  select_if(is.numeric)
+```
+
+# Verificar se há colunas numéricas antes de calcular a matriz de correlação
+```{r}
+if (ncol(numerical_data) > 1) {
+  corr_matrix <- cor(numerical_data, use = "complete.obs")
+  corrplot(corr_matrix, method = "color")
+} else {
+  print("Não há colunas numéricas suficientes para calcular a matriz de correlação.")
+}
+```
+```{r}
+data <- data %>%
+  mutate(
+    LOC_ID = as.numeric(as.character(LOC_ID)),
+    POS_ID = as.numeric(as.character(POS_ID)),
+    TYPE_ID = as.numeric(as.character(TYPE_ID)),
+    VIEW_ID = as.numeric(as.character(VIEW_ID))
+  )
+```
+`
+```{r}
+numerical_data <- data %>%
+  select_if(is.numeric) %>%
+  select_if(~sum(!is.na(.)) > 1)  # Remove colunas com apenas um valor único
+
+print(colnames(numerical_data))  # Confirmação das colunas numéricas
+```
+
+```{r}
+if (ncol(numerical_data) > 1) {
+  corr_matrix <- cor(numerical_data, use = "complete.obs")  # Calcula correlação
+  corrplot(corr_matrix, method = "color", tl.col = "black", tl.cex = 0.8)
+} else {
+  print("Não há colunas numéricas suficientes para calcular a matriz de correlação.")
+}
+```
+
+# Análise Multivariada
+
+# Selecionar apenas colunas numéricas
+```{r}
+numerical_data <- data %>%
+  select_if(is.numeric) %>%
+  select_if(~sum(!is.na(.)) > 1)  # Remove colunas com apenas um valor único
+```
+# PCA
+```{r}
+# Normalizar os dados antes da PCA
+numerical_data_scaled <- scale(numerical_data)
+
+# Executar PCA
+pca_result <- prcomp(numerical_data_scaled, center = TRUE, scale. = TRUE)
+
+# Exibir o resumo da PCA
+summary(pca_result)
+```
+
+# Criar um dataframe para o gráfico
+```{r}
+scree_data <- data.frame(
+  Componentes = seq_along(pca_result$sdev),
+  Variancia = (pca_result$sdev^2 / sum(pca_result$sdev^2)) * 100
+)
+```
+
+# Plotar com ggplot2
+```{r}
+library(ggplot2)
+
+ggplot(scree_data, aes(x = Componentes, y = Variancia)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_line(aes(group = 1), color = "red", size = 1) +
+  geom_point(color = "red", size = 3) +
+  labs(title = "Scree Plot - Variância Explicada",
+       x = "Componentes Principais",
+       y = "Variância Explicada (%)") +
+  theme_minimal()
+```
+
+# 6. Conclusão e Discussão
+
+## **Discussão**
+- Algumas falhas são recorrentes, indicando possíveis problemas persistentes.
+- A matriz de correlação revelou associações entre `LOC_ID`, `POS_ID`, `TYPE_ID` e `VIEW_ID`, sugerindo padrões em locais.
+- O boxplot de `POS_ID` destacou outliers, indicando posições com falhas.
+- A PCA mostrou que poucos componentes explicam a maior parte da variância, sugerindo redundância em algumas variáveis.
+
+## **Conclusão**
+A análise revelou padrões, mas com algumas melhorias na estrutura dos dados e a aplicação de modelos preditivos podemos gerar analises e insights mais precisos, respectivamente.
